@@ -1,0 +1,6 @@
+name = "image-gen-proxy"
+main = "cloudflare-worker.js"
+compatibility_date = "2026-06-01"
+
+[vars]
+UPSTREAM_BASE = "https://api.openai.com"
