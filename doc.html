@@ -326,7 +326,7 @@
             <span class="tag">生成图片</span>
           </div>
           <div class="endpoint-body">
-            <p class="desc">代理 Agnes 图片生成。无参考图时传 <code>return_base64: true</code> 给上游；有参考图时通过 <code>extra_body.image</code> 传图并要求 <code>b64_json</code>。</p>
+            <p class="desc">代理 Agnes 图片生成。默认使用 <code>b64_json</code> 输出；传 <code>response_format: "url"</code> 时，Worker 会在 <code>extra_body.response_format</code> 中请求上游返回图片 URL，并把 URL 原样返回给前端。URL 输出保存历史时不由浏览器下载原图，而是通过七牛 <code>/api/storage/qiniu/fetch-url</code> 服务端抓取，避免 Agnes 图片域名 CORS 限制。</p>
             <div class="grid">
               <div class="box">
                 <h3>请求字段</h3>
@@ -337,14 +337,17 @@
                   <li><code>prompt</code> 必填。</li>
                   <li><code>size</code> 默认 <code>1024x768</code>。</li>
                   <li><code>images</code> 可选，最多 10 个 base64/data URL 字符串。</li>
+                  <li><code>response_format</code> 可选，<code>b64_json</code> 或 <code>url</code>；默认 <code>b64_json</code>。</li>
                 </ul>
               </div>
               <div class="box">
                 <h3>返回字段</h3>
                 <ul>
-                  <li><code>data.imageData</code> base64 图片。</li>
+                  <li><code>data.imageData</code> base64 图片；URL 输出时为空。</li>
+                  <li><code>data.url</code> 上游图片 URL；仅 URL 输出时返回。</li>
                   <li><code>data.mimeType</code> 图片 MIME。</li>
                   <li><code>data.format</code> png/jpeg/webp。</li>
+                  <li><code>data.response_format</code> 实际输出模式。</li>
                   <li><code>data.raw</code> Agnes 原始响应。</li>
                 </ul>
               </div>
@@ -353,7 +356,8 @@
   "model": "agnes-image-2.1-flash",
   "prompt": "一张电影感海报",
   "size": "1024x768",
-  "images": []
+  "images": [],
+  "response_format": "url"
 }</pre>
           </div>
         </article>
@@ -627,12 +631,35 @@
             <span class="tag">URL 抓取上传</span>
           </div>
           <div class="endpoint-body">
-            <p class="desc">让七牛从公开 HTTP(S) URL 抓取文件到 bucket。私网地址、localhost、内网 IP 会被拒绝。</p>
+            <p class="desc">让七牛从公开 HTTP(S) URL 抓取文件到 bucket。私网地址、localhost、内网 IP 会被拒绝。抓取图片成功后，Worker 会请求七牛公网地址追加 <code>?imageInfo</code>，把 <code>width</code>、<code>height</code>、<code>size</code>、<code>format</code> 返回给前端，用于写入图片历史；前端不需要再加载原图取宽高。</p>
 <pre>{
   "url": "https://example.com/file.mp4",
   "prefix": "uploads/remote/",
   "filename": "file.mp4"
 }</pre>
+            <div class="grid">
+              <div class="box">
+                <h3>请求字段</h3>
+                <ul>
+                  <li><code>url</code> 必填，公开 HTTP(S) 文件地址。</li>
+                  <li><code>key</code> 可选，指定七牛对象 key；Agnes URL 输出保存时使用 <code>images/{id}.{ext}</code>。</li>
+                  <li><code>prefix</code> 可选，未指定 <code>key</code> 时使用，默认 <code>uploads/remote/</code>。</li>
+                  <li><code>filename</code> 可选，未指定 <code>key</code> 时用于生成文件名。</li>
+                  <li><code>mimeType</code> 可选，默认 <code>application/octet-stream</code>。</li>
+                </ul>
+              </div>
+              <div class="box">
+                <h3>返回字段</h3>
+                <ul>
+                  <li><code>data.key</code> 七牛对象 key。</li>
+                  <li><code>data.url</code> 七牛公网 URL。</li>
+                  <li><code>data.fsize</code> 文件大小；图片会优先使用 <code>imageInfo.size</code>。</li>
+                  <li><code>data.width</code> / <code>data.height</code> 图片宽高，来自七牛 <code>imageInfo</code>。</li>
+                  <li><code>data.imageInfo</code> 七牛图片基本信息原始摘要。</li>
+                  <li><code>data.preview_url</code> 图片派生预览 URL，即原图 URL 追加 <code>-pre</code>。</li>
+                </ul>
+              </div>
+            </div>
           </div>
         </article>
 
