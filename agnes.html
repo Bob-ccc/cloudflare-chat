@@ -1159,13 +1159,8 @@
       if (!fetchRes.ok) throw new Error(fetchJson.error?.message || "七牛抓取远程图片失败");
       const stored = fetchJson.data || {};
       const publicUrl = stored.url;
-      let width = 0;
-      let height = 0;
-      try {
-        const image = await loadImage(publicUrl);
-        width = image.naturalWidth || 0;
-        height = image.naturalHeight || 0;
-      } catch (_) {}
+      const width = Number(stored.width || stored.imageInfo?.width || 0);
+      const height = Number(stored.height || stored.imageInfo?.height || 0);
       const bytes = Number(stored.fsize || 0);
       const storedMime = stored.mimeType && formatFromMime(stored.mimeType) ? stored.mimeType : mime;
       const thumbnail = { mime_type: storedMime, bytes, width, height, original_bytes: bytes, original_width: width, original_height: height, compression_ratio: 1, quality: 1 };

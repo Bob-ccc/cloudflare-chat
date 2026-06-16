@@ -201,6 +201,30 @@ function qiniuPublicUrl(cfg, key) {
   return `${cfg.publicDomain}/${String(key || "").split("/").map(encodeURIComponent).join("/")}`;
 }
 
+function qiniuImageInfoUrl(url) {
+  const value = String(url || "");
+  return value + (value.includes("?") ? "&" : "?") + "imageInfo";
+}
+
+async function fetchQiniuImageInfo(publicUrl) {
+  try {
+    const res = await fetch(qiniuImageInfoUrl(publicUrl));
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json) return null;
+    return {
+      width: intValue(json.width),
+      height: intValue(json.height),
+      size: intValue(json.size),
+      format: textValue(json.format, 32),
+      colorModel: textValue(json.colorModel, 64),
+      frameNumber: intValue(json.frameNumber),
+      raw: json,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function storageImageUrl(id, kind) {
   return `/api/images/${encodeURIComponent(String(id || ""))}/${kind}`;
 }
@@ -1322,6 +1346,14 @@ async function handleQiniuFetchUrl(request, env) {
     status: "done",
     raw: json,
   };
+  const imageInfo = isQiniuImageFile(storedFile) ? await fetchQiniuImageInfo(storedFile.url) : null;
+  if (imageInfo) {
+    storedFile.imageInfo = imageInfo;
+    storedFile.width = imageInfo.width;
+    storedFile.height = imageInfo.height;
+    storedFile.fsize = imageInfo.size || storedFile.fsize;
+    if (imageInfo.format) storedFile.imageFormat = imageInfo.format;
+  }
   if (isQiniuVideoFile(storedFile)) {
     storedFile.cover_key = `${storedFile.key}-cover`;
     storedFile.cover_url = qiniuPublicUrl(cfg, storedFile.cover_key);
