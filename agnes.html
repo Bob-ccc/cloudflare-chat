@@ -1069,6 +1069,13 @@
       const format = formatFromMime(mimeType);
       return format === "jpeg" ? "jpg" : format || "png";
     }
+    function mimeFromUrl(url) {
+      const path = String(url || "").split("?")[0].toLowerCase();
+      if (/\.(jpe?g)$/.test(path)) return "image/jpeg";
+      if (/\.webp$/.test(path)) return "image/webp";
+      if (/\.png$/.test(path)) return "image/png";
+      return "";
+    }
     function srcFromImage(img, mime) { return img.imageData?.startsWith("data:") ? img.imageData : "data:" + mime + ";base64," + img.imageData; }
     function loadImage(src) {
       return new Promise((resolve, reject) => {
@@ -1139,7 +1146,40 @@
       entry.format = formatFromMime(entry.mimeType) || entry.format;
       entry.imageData = await blobToDataUrl(blob);
     }
+    async function saveRemoteUrlImage(entry) {
+      const id = crypto.randomUUID ? crypto.randomUUID() : "img-" + Date.now() + "-" + Math.random().toString(36).slice(2, 10);
+      const mime = entry.mimeType || mimeFromUrl(entry.url) || "image/png";
+      const key = "images/" + id + "." + qiniuImageExt(mime);
+      const fetchRes = await fetch("/api/storage/qiniu/fetch-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: entry.url, filename: key.split("/").pop(), mimeType: mime, key }),
+      });
+      const fetchJson = await fetchRes.json().catch(() => ({}));
+      if (!fetchRes.ok) throw new Error(fetchJson.error?.message || "七牛抓取远程图片失败");
+      const stored = fetchJson.data || {};
+      const publicUrl = stored.url;
+      let width = 0;
+      let height = 0;
+      try {
+        const image = await loadImage(publicUrl);
+        width = image.naturalWidth || 0;
+        height = image.naturalHeight || 0;
+      } catch (_) {}
+      const bytes = Number(stored.fsize || 0);
+      const storedMime = stored.mimeType && formatFromMime(stored.mimeType) ? stored.mimeType : mime;
+      const thumbnail = { mime_type: storedMime, bytes, width, height, original_bytes: bytes, original_width: width, original_height: height, compression_ratio: 1, quality: 1 };
+      const res = await fetch("/api/images", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, prompt: entry.prompt, model: entry.model, api_mode: entry.api_mode || "agnes", size: entry.size, quality: entry.quality, format: formatFromMime(storedMime) || entry.format || "png", streamed: entry.streamed ? 1 : 0, reference_count: entry.reference_count || 0, storage_provider: "qiniu", storage_key: stored.key, thumbnail_url: publicUrl, thumbnail }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error?.message || "服务端历史写入失败");
+      return json.data;
+    }
     async function saveImage(entry) {
+      if (entry.url && !entry.imageData) return saveRemoteUrlImage(entry);
       await hydrateUrlImage(entry);
       const image = await loadImage(srcFromImage(entry, entry.mimeType));
       const originalBytes = base64Bytes(entry.imageData);
