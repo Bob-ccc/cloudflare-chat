@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>接口文档 | GPT Image Playground</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0d1117;
+      --panel: #141a23;
+      --panel-2: #182130;
+      --line: rgba(224, 232, 244, .12);
+      --text: #eef3fb;
+      --muted: #94a3b8;
+      --soft: #c8d3e2;
+      --blue: #5b8cff;
+      --green: #47d18c;
+      --amber: #f2b84b;
+      --red: #ff6b76;
+      --code: #0a0f17;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+      letter-spacing: 0;
+    }
+    a { color: inherit; text-decoration: none; }
+    code, pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+    .shell {
+      display: grid;
+      grid-template-columns: 276px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+    .side {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      padding: 22px 18px;
+      border-right: 1px solid var(--line);
+      background: #0f151f;
+      overflow: auto;
+    }
+    .brand {
+      display: grid;
+      gap: 4px;
+      margin-bottom: 22px;
+    }
+    .brand strong {
+      font-size: 18px;
+      line-height: 1.2;
+    }
+    .brand span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .nav {
+      display: grid;
+      gap: 6px;
+    }
+    .nav a {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 34px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      color: var(--soft);
+      font-size: 13px;
+    }
+    .nav a:hover {
+      background: rgba(255, 255, 255, .06);
+      color: #fff;
+    }
+    .main {
+      min-width: 0;
+      padding: 28px min(5vw, 56px) 56px;
+    }
+    .top {
+      display: grid;
+      gap: 14px;
+      max-width: 1080px;
+      margin-bottom: 26px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+    .lead {
+      margin: 0;
+      max-width: 860px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .quick {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 5px 9px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--soft);
+      background: rgba(255,255,255,.04);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    section {
+      max-width: 1080px;
+      margin-top: 28px;
+    }
+    h2 {
+      margin: 0 0 12px;
+      font-size: 18px;
+      line-height: 1.3;
+      letter-spacing: 0;
+    }
+    .section-note {
+      margin: -4px 0 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .endpoint {
+      overflow: hidden;
+      margin: 10px 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+    .endpoint-head {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,.035);
+    }
+    .method {
+      min-width: 58px;
+      padding: 4px 7px;
+      border-radius: 6px;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+    .get { background: rgba(71, 209, 140, .14); color: #8df0b9; }
+    .post { background: rgba(91, 140, 255, .16); color: #a8c1ff; }
+    .delete { background: rgba(255, 107, 118, .15); color: #ffabb1; }
+    .any { background: rgba(242, 184, 75, .16); color: #ffd48a; }
+    .path {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 14px;
+      color: #fff;
+    }
+    .tag {
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .endpoint-body {
+      display: grid;
+      gap: 13px;
+      padding: 14px;
+    }
+    .desc {
+      margin: 0;
+      color: var(--soft);
+      font-size: 13px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .box {
+      min-width: 0;
+      padding: 11px;
+      border: 1px solid rgba(224, 232, 244, .09);
+      border-radius: 8px;
+      background: rgba(255,255,255,.035);
+    }
+    .box h3 {
+      margin: 0 0 8px;
+      color: #fff;
+      font-size: 13px;
+      line-height: 1.2;
+    }
+    ul {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    li + li { margin-top: 4px; }
+    pre {
+      overflow: auto;
+      margin: 0;
+      padding: 12px;
+      border: 1px solid rgba(224, 232, 244, .09);
+      border-radius: 8px;
+      background: var(--code);
+      color: #dbe7f5;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .notice {
+      padding: 12px 14px;
+      border: 1px solid rgba(242, 184, 75, .22);
+      border-radius: 8px;
+      background: rgba(242, 184, 75, .08);
+      color: #f5dca5;
+      font-size: 13px;
+    }
+    @media (max-width: 860px) {
+      .shell { grid-template-columns: 1fr; }
+      .side {
+        position: static;
+        height: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .nav {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .main { padding: 22px 16px 42px; }
+      .grid { grid-template-columns: 1fr; }
+      .endpoint-head { grid-template-columns: auto minmax(0, 1fr); }
+      .tag { grid-column: 2; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="side">
+      <div class="brand">
+        <strong>接口文档</strong>
+        <span>当前部署 Worker / Pages API</span>
+      </div>
+      <nav class="nav">
+        <a href="#overview">概览 <span>Base</span></a>
+        <a href="#openai">OpenAI 兼容 <span>/v1</span></a>
+        <a href="#agnes">Agnes <span>/api/agnes</span></a>
+        <a href="#images">图片历史 <span>/api/images</span></a>
+        <a href="#storage">七牛存储 <span>/api/storage</span></a>
+        <a href="#disabled">禁用接口 <span>/api/jobs</span></a>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <div class="top" id="overview">
+        <h1>GPT Image Playground 接口文档</h1>
+        <p class="lead">本文档由当前项目代码整理。接口运行在同站点 Pages Function 中，前端可直接使用相对路径调用。除七牛直传接口外，所有接口返回 JSON；错误格式通常为 <code>{ "error": { "message": "..." } }</code>。</p>
+        <div class="quick">
+          <span class="pill">Base URL: 当前站点 origin</span>
+          <span class="pill">CORS: GET / POST / DELETE / OPTIONS</span>
+          <span class="pill">图片历史: D1 元信息 + 七牛图片</span>
+          <span class="pill">云存储: 七牛 Kodo</span>
+        </div>
+        <div class="notice">注意：七牛公网域名当前配置为 HTTP。HTTPS 页面内直接展示 HTTP 缩略图会受浏览器 mixed content 策略影响；文件链接本身仍按接口返回值输出。</div>
+      </div>
+
+      <section id="openai">
+        <h2>OpenAI 兼容代理</h2>
+        <p class="section-note">所有 <code>/v1/*</code> 请求会被 Worker 原样转发到上游。页面主要使用 <code>/v1/responses</code> 和 <code>/v1/images/generations</code>。</p>
+
+        <article class="endpoint">
+          <div class="endpoint-head">
+            <span class="method any">ANY</span>
+            <code class="path">/v1/*</code>
+            <span class="tag">代理转发</span>
+          </div>
+          <div class="endpoint-body">
+            <p class="desc">转发到 <code>X-Upstream-Base</code>、环境变量 <code>UPSTREAM_BASE</code> 或默认 <code>https://api.openai.com</code>。如果上游 Base URL 已经以 <code>/v1</code> 结尾，Worker 会避免重复拼接。</p>
+            <div class="grid">
+              <div class="box">
+                <h3>请求头</h3>
+                <ul>
+                  <li><code>Authorization: Bearer ...</code>，未配置 <code>OPENAI_API_KEY</code> 时必填。</li>
+                  <li><code>X-Upstream-Base</code> 可选，覆盖上游地址。</li>
+                  <li><code>Content-Type</code> 会透传给上游。</li>
+                </ul>
+              </div>
+              <div class="box">
+                <h3>常用路径</h3>
+                <ul>
+                  <li><code>POST /v1/responses</code></li>
+                  <li><code>POST /v1/images/generations</code></li>
+                </ul>
+              </div>
+            </div>
+<pre>{
+  "model": "gpt-image-1",
+  "prompt": "一张产品图",
+  "size": "1024x1024"
+}</pre>
+          </div>
+        </article>
+      </section>
+
+      <section id="agnes">
+        <h2>Agnes 图片与视频</h2>
+        <p class="section-note">用于 <code>/agnes</code> 页面。API Key 可从请求体传入，也可以配置 Worker secret <code>AGNES_API_KEY</code>。</p>
+
+        <article class="endpoint">
+          <div class="endpoint-head">
+            <span class="method post">POST</span>
+            <code class="path">/api/agnes/generate</code>
+            <span class="tag">生成图片</span>
+          </div>
+          <div class="endpoint-body">
+            <p class="desc">代理 Agnes 图片生成。无参考图时传 <code>return_base64: true</code> 给上游；有参考图时通过 <code>extra_body.image</code> 传图并要求 <code>b64_json</code>。</p>
+            <div class="grid">
+              <div class="box">
+                <h3>请求字段</h3>
+                <ul>
+                  <li><code>apiKey</code> 可选，Agnes API Key。</li>
+                  <li><code>baseUrl</code> 可选，默认 <code>https://apihub.agnes-ai.com</code>。</li>
+                  <li><code>model</code> 默认 <code>agnes-image-2.1-flash</code>。</li>
+                  <li><code>prompt</code> 必填。</li>
+                  <li><code>size</code> 默认 <code>1024x768</code>。</li>
+                  <li><code>images</code> 可选，最多 10 个 base64/data URL 字符串。</li>
+                </ul>
+              </div>
+              <div class="box">
+                <h3>返回字段</h3>
+                <ul>
+                  <li><code>data.imageData</code> base64 图片。</li>
+                  <li><code>data.mimeType</code> 图片 MIME。</li>
+                  <li><code>data.format</code> png/jpeg/webp。</li>
+                  <li><code>data.raw</code> Agnes 原始响应。</li>
+                </ul>
+              </div>
+            </div>
+<pre>{
+  "model": "agnes-image-2.1-flash",
+  "prompt": "一张电影感海报",
+  "size": "1024x768",
+  "images": []
+}</pre>
+          </div>
+        </article>
+
+        <article class="endpoint">
+          <div class="endpoint-head">
+            <span class="method post">POST</span>
+            <code class="path">/api/agnes/videos</code>
+            <span class="tag">创建视频任务</span>
+          </div>
+          <div class="endpoint-body">
+            <p class="desc">创建 Agnes 视频任务。单张参考图走 <code>image</code> 字段，多张参考图走 <code>extra_body.image</code>。</p>
+            <div class="grid">
+              <div class="box">
+                <h3>请求字段</h3>
+                <ul>
+                  <li><code>model</code> 默认 <code>agnes-video-v2.0</code>。</li>
+                  <li><code>prompt</code> 必填。</li>
+                  <li><code>size</code> 如 <code>1152x768</code>，会拆为 <code>width/height</code>。</li>
+                  <li><code>num_frames</code> 默认 121，范围 1-441，并会修正为 <code>8n+1</code>。</li>
+                  <li><code>frame_rate</code> 默认 24，范围 1-60。</li>
+                  <li><code>imageUrls</code> 可选，最多 10 个 HTTP(S) URL。</li>
+                  <li><code>mode</code> 为 <code>keyframes</code> 时写入 <code>extra_body.mode</code>。</li>
+                </ul>
+              </div>
+              <div class="box">
+                <h3>返回字段</h3>
+                <ul>
+                  <li><code>data.id</code> / <code>data.task_id</code> 任务 ID。</li>
+                  <li><code>data.video_id</code> 视频 ID。</li>
+                  <li><code>data.status</code> 任务状态。</li>
+                  <li><code>data.video_url</code> 完成后的视频地址。</li>
+                  <li><code>data.raw</code> 原始响应。</li>
+                </ul>
+              </div>
+            </div>
+<pre>{
+  "prompt": "镜头缓慢推进",
+  "size": "1152x768",
+  "num_frames": 121,
+  "frame_rate": 24,
+  "imageUrls": ["http://xjp.zaoj.top/uploads/example.png"]
+}</pre>
+          </div>
+        </article>
+
+        <article class="endpoint">
+          <div class="endpoint-head">
+            <span class="method post">POST</span>
+            <code class="path">/api/agnes/videos/query</code>
+            <span class="tag">查询视频任务</span>
+          </div>
+          <div class="endpoint-body">
+            <p class="desc">查询 Agnes 视频任务状态。会尝试 <code>/agnesapi?video_id=...</code>、带 <code>model_name</code> 的查询地址，以及 <code>/v1/videos/:task_id</code>。</p>
+<pre>{
+  "model": "agnes-video-v2.0",
+  "video_id": "video_xxx",
+  "task_id": "task_xxx"
+}</pre>
+          </div>
+        </article>
+      </section>
+
+      <section id="images">
+        <h2>图片历史</h2>
+        <p class="section-note">index、studio、agnes 画廊使用这组接口。新记录支持 <code>storage_provider: "qiniu"</code>，生成原图直接写入七牛；缩略图 URL 由原图 URL 追加 <code>-pre</code> 得到。D1 只保留元信息、对象 key、展示 URL 和尺寸/大小数据；旧记录仍兼容 D1 base64 图片。</p>
+
+        <article class="endpoint">
+          <div class="endpoint-head">
+            <span class="method get">GET</span>
+            <code class="path">/api/images</code>
+            <span class="tag">分页列表</span>
+          </div>
+          <div class="endpoint-body">
+            <p class="desc">按创建时间倒序返回图片记录。使用游标分页。</p>
+            <div class="grid">
+              <div class="box">
+                <h3>查询参数</h3>
+                <ul>
+                  <li><code>limit</code> 默认 50，最大 100。</li>
+                  <li><code>cursor_created_at</code> 下一页游标时间。</li>
+                  <li><code>cursor_id</code> 下一页游标 ID。</li>
+                  <li><code>api_mode</code> 可选，例如 <code>agnes</code>。</li>
+                </ul>
+              </div>
+              <div class="box">
+                <h3>返回字段</h3>
+                <ul>
+                  <li><code>data[]</code> 图片记录和元信息。</li>
+                  <li><code>has_more</code> 是否还有下一页。</li>
+                  <li><code>next_cursor</code> 下一页游标。</li>
+                  <li><code>thumbnail_url</code> / <code>preview_url</code> 站内图片地址。</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="endpoint">
+          <div class="endpoint-head">
+            <span class="method post">POST</span>
+            <code class="path">/api/images</code>
+            <span class="tag">创建历史记录</span>
+          </div>
+          <div class="endpoint-body">
+            <p class="desc">写入图片元信息。新七牛模式由浏览器先把原始生成图直传到七牛，再把对象 key、公开 URL 和尺寸/大小元数据登记到 D1；列表缩略图使用七牛侧 <code>-pre</code> 派生地址。</p>
+            <div class="grid">
+              <div class="box">
+                <h3>元信息字段</h3>
+                <ul>
+                  <li><code>prompt</code>、<code>model</code>、<code>api_mode</code></li>
+                  <li><code>size</code>、<code>quality</code>、<code>format</code></li>
+                  <li><code>streamed</code>、<code>reference_count</code></li>
+                  <li><code>storage_provider</code> 可选，传 <code>qiniu</code> 时表示图片已写入七牛。</li>
+                  <li><code>id</code>、<code>storage_key</code>、<code>thumbnail_url</code> 七牛直传登记时必填。</li>
+                  <li>七牛 key 规则：原图 <code>images/{id}.{ext}</code>，缩略图地址 <code>images/{id}.{ext}-pre</code>。</li>
+                </ul>
+              </div>
+              <div class="box">
+                <h3>图片字段</h3>
+                <ul>
+                  <li><code>thumbnail.mime_type</code>: image/webp、image/jpeg、image/png。</li>
+                  <li>七牛直传登记不传 <code>thumbnail.data_base64</code>；D1 只保存元信息。</li>
+                  <li><code>thumbnail.bytes</code>、<code>width</code>、<code>height</code>。</li>
+                  <li><code>preview.*</code> 七牛直传登记不需要传；列表图使用七牛 <code>-pre</code> 派生地址。</li>
+                  <li>旧的 D1/base64 兼容路径仍可传 <code>thumbnail.data_base64</code>。</li>
+                </ul>
+              </div>
+            </div>
+<pre>{
+  "id": "018f7c8e-xxxx",
+  "prompt": "一张图片",
+  "model": "gpt-image-1",
+  "api_mode": "responses",
+  "size": "1024x1024",
+  "format": "png",
+  "storage_provider": "qiniu",
+  "storage_key": "images/018f7c8e-xxxx.png",
+  "thumbnail_url": "http://xjp.zaoj.top/images/018f7c8e-xxxx.png",
+  "thumbnail": {
+    "mime_type": "image/png",
+    "bytes": 1800000,
+    "width": 1024,
+    "height": 1024,
+    "original_bytes": 1800000,
+    "original_width": 1024,
+    "original_height": 1024,
+    "compression_ratio": 1,
+    "quality": 1
+  }
+}</pre>
+          </div>
+        </article>
+
+        <article class="endpoint">
+          <div class="endpoint-head">
+            <span class="method get">GET</span>
+            <code class="path">/api/images/:id</code>
+            <span class="tag">详情</span>
+          </div>
+          <div class="endpoint-body">
+            <p class="desc">返回单条图片记录和站内图片 URL。</p>
+          </div>
+        </article>
+
+        <article class="endpoint">
+          <div class="endpoint-head">
+            <span class="method delete">DELETE</span>
+            <code class="path">/api/images/:id</code>
+            <span class="tag">删除记录</span>
+          </div>
+          <div class="endpoint-body">
+            <p class="desc">删除 <code>images</code> 和对应 <code>image_thumbnails</code> 记录。</p>
+          </div>
+        </article>
+
+        <article class="endpoint">
+          <div class="endpoint-head">
+            <span class="method get">GET</span>
+            <code class="path">/api/images/:id/thumbnail</code>
+            <span class="tag">详情图</span>
+          </div>
+          <div class="endpoint-body">
+            <p class="desc">返回详情图二进制响应，带 <code>Content-Type</code> 和长期缓存头。</p>
+          </div>
+        </article>
+
+        <article class="endpoint">
+          <div class="endpoint-head">
+            <span class="method get">GET</span>
+            <code class="path">/api/images/:id/preview</code>
+            <span class="tag">列表图</span>
+          </div>
+          <div class="endpoint-body">
+            <p class="desc">返回列表预览图二进制响应。七牛模式下优先读取原图 URL 追加 <code>-pre</code> 的派生图；如果七牛返回错误，接口返回 <code>204 No Content</code> 空响应，不回退原图。</p>
+          </div>
+        </article>
+      </section>
+
+      <section id="storage">
+        <h2>七牛云存储</h2>
+        <p class="section-note">公共云存储组件使用这组接口。允许目录前缀包括 <code>uploads/</code>、<code>uploads/local/</code>、<code>uploads/remote/</code>、<code>agnes/</code>、<code>agnes/images/</code>、<code>agnes/videos/</code>。</p>
+
+        <article class="endpoint">
+          <div class="endpoint-head">
+            <span class="method post">POST</span>
+            <code class="path">/api/storage/qiniu/upload-token</code>
+            <span class="tag">获取上传凭证</span>
+          </div>
+          <div class="endpoint-body">
+            <p class="desc">生成七牛直传 token。前端拿到 token 后直接向 <code>uploadUrl</code> 提交 FormData。</p>
+            <div class="grid">
+              <div class="box">
+                <h3>请求字段</h3>
+                <ul>
+                  <li><code>filename</code> 文件名。</li>
+                  <li><code>mimeType</code> 或 <code>contentType</code>。</li>
+                  <li><code>size</code> 文件大小。</li>
+                  <li><code>prefix</code> 保存目录。</li>
+                  <li><code>key</code> 可选，显式指定对象 key。</li>
+                  <li><code>expires</code> 可选，默认 1800 秒。</li>
+                </ul>
+              </div>
+              <div class="box">
+                <h3>返回字段</h3>
+                <ul>
+                  <li><code>data.token</code> 七牛上传 token。</li>
+                  <li><code>data.key</code> 最终对象 key。</li>
+                  <li><code>data.uploadUrl</code> 七牛上传地址。</li>
+                  <li><code>data.publicUrl</code> 公网访问 URL。</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="endpoint">
+          <div class="endpoint-head">
+            <span class="method get">GET</span>
+            <code class="path">/api/storage/qiniu/files</code>
+            <span class="tag">文件列表</span>
+          </div>
+          <div class="endpoint-body">
+            <p class="desc">列出七牛 bucket 文件。接口会给图片补 <code>preview_url = url + "-pre"</code>，给视频补 <code>cover_url = url + "-cover"</code>。</p>
+            <div class="grid">
+              <div class="box">
+                <h3>查询参数</h3>
+                <ul>
+                  <li><code>prefix</code> 默认 <code>uploads/</code>。</li>
+                  <li><code>limit</code> 默认 50，范围 1-1000。</li>
+                  <li><code>marker</code> 七牛分页游标。</li>
+                </ul>
+              </div>
+              <div class="box">
+                <h3>返回字段</h3>
+                <ul>
+                  <li><code>data[]</code> 文件列表。</li>
+                  <li><code>marker</code> 下一页游标。</li>
+                  <li><code>url</code> 原文件公网 URL。</li>
+                  <li><code>preview_url</code> / <code>cover_url</code> 派生资源 URL。</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="endpoint">
+          <div class="endpoint-head">
+            <span class="method post">POST</span>
+            <code class="path">/api/storage/qiniu/fetch-url</code>
+            <span class="tag">URL 抓取上传</span>
+          </div>
+          <div class="endpoint-body">
+            <p class="desc">让七牛从公开 HTTP(S) URL 抓取文件到 bucket。私网地址、localhost、内网 IP 会被拒绝。</p>
+<pre>{
+  "url": "https://example.com/file.mp4",
+  "prefix": "uploads/remote/",
+  "filename": "file.mp4"
+}</pre>
+          </div>
+        </article>
+
+        <article class="endpoint">
+          <div class="endpoint-head">
+            <span class="method delete">DELETE</span>
+            <code class="path">/api/storage/qiniu/files/:encodedKey</code>
+            <span class="tag">删除文件</span>
+          </div>
+          <div class="endpoint-body">
+            <p class="desc">删除七牛对象。公共组件删除主文件时会额外尝试删除对应 <code>-pre</code> 或 <code>-cover</code> 派生文件。</p>
+          </div>
+        </article>
+      </section>
+
+      <section id="disabled">
+        <h2>禁用接口</h2>
+        <article class="endpoint">
+          <div class="endpoint-head">
+            <span class="method any">ANY</span>
+            <code class="path">/api/jobs 和 /api/jobs/*</code>
+            <span class="tag">已禁用</span>
+          </div>
+          <div class="endpoint-body">
+            <p class="desc">Background jobs 已撤回。当前统一返回 <code>404</code> 和 <code>{ "error": { "message": "Background jobs are disabled" } }</code>。</p>
+          </div>
+        </article>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

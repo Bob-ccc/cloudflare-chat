@@ -373,6 +373,38 @@
       word-break: break-all;
     }
 
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+      gap: 6px;
+      margin-top: 8px;
+      word-break: normal;
+    }
+
+    .meta-item {
+      min-width: 0;
+      padding: 7px 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: rgba(36, 40, 54, 0.66);
+    }
+
+    .meta-label {
+      display: block;
+      margin-bottom: 2px;
+      color: var(--text-muted);
+      font-size: 0.68rem;
+    }
+
+    .meta-value {
+      display: block;
+      color: var(--text);
+      font-size: 0.75rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
     .preview-meta .badge {
       display: inline-block;
       padding: 2px 8px;
@@ -452,12 +484,11 @@
 
     .history-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
       gap: 10px;
     }
 
     .history-item {
-      aspect-ratio: 1;
       border-radius: 8px;
       overflow: hidden;
       cursor: pointer;
@@ -478,9 +509,37 @@
 
     .history-item img {
       width: 100%;
-      height: 100%;
-      object-fit: cover;
+      aspect-ratio: 1;
+      object-fit: contain;
       display: block;
+      background: #10131b;
+    }
+
+    .history-info {
+      display: grid;
+      gap: 2px;
+      padding: 7px 8px 8px;
+      min-height: 52px;
+      border-top: 1px solid rgba(46, 51, 72, 0.75);
+    }
+
+    .history-prompt {
+      color: var(--text);
+      font-size: 0.72rem;
+      line-height: 1.25;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+
+    .history-meta {
+      color: var(--text-muted);
+      font-size: 0.68rem;
+      line-height: 1.25;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .history-empty {
@@ -492,6 +551,16 @@
       background: var(--surface);
       border: 1px dashed var(--border);
       border-radius: var(--radius);
+    }
+
+    .history-footer {
+      display: flex;
+      justify-content: center;
+      margin-top: 14px;
+    }
+
+    .history-footer .btn-secondary {
+      min-width: 128px;
     }
   </style>
 </head>
@@ -527,7 +596,7 @@
           </div>
           <div class="field">
             <label for="model">模型</label>
-            <input type="text" id="model" value="gpt-image-2" />
+            <input type="text" id="model" value="gpt-5" />
           </div>
         </div>
 
@@ -671,6 +740,11 @@
       <div class="history-grid" id="historyGrid">
         <div class="history-empty">暂无缓存记录</div>
       </div>
+      <div class="history-footer">
+        <button type="button" class="btn-secondary" id="btnLoadMoreHistory" hidden>
+          加载更多
+        </button>
+      </div>
     </section>
   </div>
 
@@ -721,6 +795,7 @@
         status: $("status"),
         historyGrid: $("historyGrid"),
         historyCount: $("historyCount"),
+        btnLoadMoreHistory: $("btnLoadMoreHistory"),
       };
 
       let db = null;
@@ -728,6 +803,11 @@
       let fileReferenceImages = [];
       let urlReferenceImages = [];
       let referenceImages = [];
+      let serverHistoryItems = [];
+      let serverHistoryCursor = null;
+      let serverHistoryHasMore = false;
+      let serverHistoryLoaded = false;
+      let historyLoading = false;
 
       function setStatus(msg, type) {
         els.status.textContent = msg || "";
@@ -1102,13 +1182,154 @@
         }
       }
 
+      async function listServerImages(cursor) {
+        const params = new URLSearchParams({ limit: String(MAX_CACHE) });
+        if (cursor && cursor.created_at && cursor.id) {
+          params.set("cursor_created_at", cursor.created_at);
+          params.set("cursor_id", cursor.id);
+        }
+        const res = await fetch("/api/images?" + params.toString(), {
+          headers: { Accept: "application/json" },
+        });
+        if (!res.ok) throw new Error("服务端历史读取失败");
+        const json = await res.json();
+        return {
+          data: Array.isArray(json.data) ? json.data : [],
+          hasMore: !!json.has_more,
+          nextCursor: json.next_cursor || null,
+        };
+      }
+
+      function normalizeServerEntry(row) {
+        return {
+          id: row.id,
+          hash: row.id,
+          prompt: row.prompt || "",
+          apiMode: row.api_mode || "",
+          model: row.model || "",
+          size: row.size || "",
+          quality: row.quality || "",
+          outputFormat: row.format || "png",
+          mimeType: mimeFromFormat(row.format || "png"),
+          streamed: !!row.streamed,
+          referenceImageCount: row.reference_count || 0,
+          public_url: row.thumbnail_url || row.public_url || "",
+          preview_url: row.preview_url || row.thumbnail_url || row.public_url || "",
+          url: row.thumbnail_url || row.public_url || "",
+          thumbnailBytes: row.thumbnail_bytes || 0,
+          thumbnailWidth: row.thumbnail_width || 0,
+          thumbnailHeight: row.thumbnail_height || 0,
+          thumbnailMimeType: row.thumbnail_mime_type || "",
+          previewBytes: row.preview_bytes || 0,
+          previewWidth: row.preview_width || 0,
+          previewHeight: row.preview_height || 0,
+          previewMimeType: row.preview_mime_type || "",
+          originalBytes: row.original_bytes || 0,
+          originalWidth: row.original_width || 0,
+          originalHeight: row.original_height || 0,
+          compressionRatio: row.compression_ratio || 0,
+          timestamp: Date.parse(row.created_at || "") || 0,
+          server: true,
+        };
+      }
+
+      function formatBytes(bytes) {
+        const n = Number(bytes) || 0;
+        if (!n) return "未知";
+        if (n < 1024) return n + " B";
+        if (n < 1024 * 1024) return (n / 1024).toFixed(n < 100 * 1024 ? 1 : 0) + " KB";
+        return (n / 1024 / 1024).toFixed(2) + " MB";
+      }
+
+      function formatDimensions(width, height) {
+        return width && height ? width + " × " + height : "未知";
+      }
+
+      function base64PayloadLength(value) {
+        return String(value || "").replace(/^data:[^,]+,/, "").replace(/\s/g, "").length;
+      }
+
+      function base64ByteLength(value) {
+        const clean = base64PayloadLength(value);
+        if (!clean) return 0;
+        const str = String(value || "").replace(/^data:[^,]+,/, "").replace(/\s/g, "");
+        const padding = str.endsWith("==") ? 2 : str.endsWith("=") ? 1 : 0;
+        return Math.max(0, Math.floor((clean * 3) / 4) - padding);
+      }
+
       function mimeFromFormat(format) {
         if (format === "jpeg") return "image/jpeg";
         if (format === "webp") return "image/webp";
         return "image/png";
       }
 
+      function formatFromMime(mimeType) {
+        const type = (mimeType || "").toLowerCase();
+        if (type === "image/jpeg" || type === "image/jpg") return "jpeg";
+        if (type === "image/webp") return "webp";
+        if (type === "image/png") return "png";
+        return "";
+      }
+
+      function mimeFromDataUrl(dataUrl) {
+        const match = /^data:([^;,]+)[;,]/i.exec(dataUrl || "");
+        return match ? match[1].toLowerCase() : "";
+      }
+
+      function base64PrefixBytes(b64, length) {
+        const clean = String(b64 || "")
+          .replace(/^data:[^,]+,/, "")
+          .replace(/\s/g, "");
+        try {
+          const raw = atob(clean.slice(0, Math.ceil((length * 4) / 3) + 4));
+          return Array.from(raw.slice(0, length)).map((c) => c.charCodeAt(0));
+        } catch {
+          return [];
+        }
+      }
+
+      function mimeFromBase64(b64) {
+        const dataUrlMime = mimeFromDataUrl(b64);
+        if (dataUrlMime) return dataUrlMime;
+        const bytes = base64PrefixBytes(b64, 16);
+        if (bytes.length >= 8) {
+          if (
+            bytes[0] === 0x89 &&
+            bytes[1] === 0x50 &&
+            bytes[2] === 0x4e &&
+            bytes[3] === 0x47
+          ) {
+            return "image/png";
+          }
+          if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+            return "image/jpeg";
+          }
+          if (
+            bytes[0] === 0x52 &&
+            bytes[1] === 0x49 &&
+            bytes[2] === 0x46 &&
+            bytes[3] === 0x46 &&
+            bytes[8] === 0x57 &&
+            bytes[9] === 0x45 &&
+            bytes[10] === 0x42 &&
+            bytes[11] === 0x50
+          ) {
+            return "image/webp";
+          }
+          if (
+            bytes[0] === 0x47 &&
+            bytes[1] === 0x49 &&
+            bytes[2] === 0x46 &&
+            bytes[3] === 0x38
+          ) {
+            return "image/gif";
+          }
+        }
+        return "";
+      }
+
       function imageSrcFromEntry(entry) {
+        if (entry.public_url) return entry.public_url;
         if (entry.imageData) {
           if (entry.imageData.startsWith("data:")) return entry.imageData;
           return (
@@ -1120,6 +1341,168 @@
         }
         if (entry.url) return entry.url;
         return "";
+      }
+
+      function previewSrcFromEntry(entry) {
+        return entry.preview_url || imageSrcFromEntry(entry);
+      }
+
+      function entryMetaItems(entry) {
+        const originalDims = formatDimensions(entry.originalWidth, entry.originalHeight);
+        const thumbDims = formatDimensions(entry.thumbnailWidth, entry.thumbnailHeight);
+        const ratio = entry.compressionRatio
+          ? Math.round(entry.compressionRatio * 100) + "%"
+          : "未知";
+        return [
+          ["原图尺寸", originalDims],
+          ["原图大小", formatBytes(entry.originalBytes)],
+          ["历史图尺寸", thumbDims],
+          ["历史图大小", formatBytes(entry.thumbnailBytes)],
+          ["压缩比例", ratio],
+          ["保存格式", (entry.thumbnailMimeType || entry.mimeType || "").replace("image/", "").toUpperCase() || "未知"],
+        ];
+      }
+
+      function metaGridHtml(entry) {
+        return (
+          '<div class="meta-grid">' +
+          entryMetaItems(entry)
+            .map(
+              ([label, value]) =>
+                '<div class="meta-item"><span class="meta-label">' +
+                escapeHtml(label) +
+                '</span><span class="meta-value" title="' +
+                escapeHtml(value) +
+                '">' +
+                escapeHtml(value) +
+                "</span></div>"
+            )
+            .join("") +
+          "</div>"
+        );
+      }
+
+      function loadImageElement(src) {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          if (/^https?:\/\//i.test(src)) img.crossOrigin = "anonymous";
+          img.onload = () => resolve(img);
+          img.onerror = () => reject(new Error("缩略图读取失败"));
+          img.src = src;
+        });
+      }
+
+      function blobToDataUrl(blob) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ""));
+          reader.onerror = () => reject(reader.error || new Error("图片读取失败"));
+          reader.readAsDataURL(blob);
+        });
+      }
+
+      async function hydrateUrlImage(entry) {
+        if (!entry.url || entry.imageData) return;
+        const res = await fetch(entry.url);
+        if (!res.ok) throw new Error("接口返回的图片 URL 下载失败");
+        const blob = await res.blob();
+        entry.mimeType = blob.type || res.headers.get("Content-Type") || entry.mimeType;
+        entry.outputFormat = formatFromMime(entry.mimeType) || entry.outputFormat;
+        entry.imageData = await blobToDataUrl(blob);
+      }
+
+      function estimateOriginalBytes(entry) {
+        if (entry.imageData) return base64ByteLength(entry.imageData);
+        return 0;
+      }
+
+      function rawBase64FromImageData(imageData) {
+        return String(imageData || "").replace(/^data:[^,]+,/, "").replace(/\s/g, "");
+      }
+
+      function base64ToBlob(value, mimeType) {
+        const clean = rawBase64FromImageData(value);
+        const binary = atob(clean);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        return new Blob([bytes], { type: mimeType || "application/octet-stream" });
+      }
+
+      function qiniuImageExt(mimeType) {
+        const format = formatFromMime(mimeType);
+        return format === "jpeg" ? "jpg" : format || "png";
+      }
+
+      async function uploadGeneratedImageToQiniu(entry, mimeType) {
+        const id = crypto.randomUUID ? crypto.randomUUID() : "img-" + Date.now() + "-" + Math.random().toString(36).slice(2, 10);
+        const key = "images/" + id + "." + qiniuImageExt(mimeType);
+        const file = base64ToBlob(entry.imageData, mimeType);
+        const tokenRes = await fetch("/api/storage/qiniu/upload-token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filename: key.split("/").pop(), mimeType, size: file.size, key }),
+        });
+        const tokenJson = await tokenRes.json().catch(() => ({}));
+        if (!tokenRes.ok) throw new Error(tokenJson.error?.message || "七牛上传凭证获取失败");
+        const tokenData = tokenJson.data || {};
+        const form = new FormData();
+        form.append("token", tokenData.token);
+        form.append("key", tokenData.key);
+        form.append("file", file, key.split("/").pop());
+        const uploadRes = await fetch(tokenData.uploadUrl, { method: "POST", body: form });
+        const uploadJson = await uploadRes.json().catch(() => ({}));
+        if (!uploadRes.ok) throw new Error(uploadJson.error || uploadJson.message || "七牛原图上传失败");
+        return { id, key: tokenData.key, url: tokenData.publicUrl, bytes: file.size };
+      }
+
+      async function saveServerImage(entry) {
+        await hydrateUrlImage(entry);
+        const source = await loadImageElement(imageSrcFromEntry(entry));
+        entry.originalWidth = source.naturalWidth;
+        entry.originalHeight = source.naturalHeight;
+        entry.originalBytes = estimateOriginalBytes(entry);
+        const mimeType = (entry.mimeType || mimeFromFormat(entry.outputFormat) || "image/png").toLowerCase();
+        const stored = await uploadGeneratedImageToQiniu(entry, mimeType);
+        const thumbnail = {
+          mime_type: mimeType,
+          bytes: stored.bytes || entry.originalBytes,
+          width: source.naturalWidth,
+          height: source.naturalHeight,
+          quality: 1,
+          original_bytes: stored.bytes || entry.originalBytes,
+          original_width: source.naturalWidth,
+          original_height: source.naturalHeight,
+          compression_ratio: 1,
+        };
+        const res = await fetch("/api/images", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: stored.id,
+            prompt: entry.prompt,
+            model: entry.model,
+            api_mode: entry.apiMode,
+            size: entry.size,
+            quality: entry.quality,
+            format: entry.outputFormat,
+            streamed: entry.streamed ? 1 : 0,
+            reference_count: entry.referenceImageCount || 0,
+            storage_provider: "qiniu",
+            storage_key: stored.key,
+            thumbnail_url: stored.url,
+            thumbnail,
+          }),
+        });
+        if (!res.ok) {
+          const json = await res.json().catch(() => null);
+          throw new Error(json?.error?.message || "服务端历史写入失败");
+        }
+        const json = await res.json();
+        const data = json.data || null;
+        if (data) {
+          data.thumbnail = thumbnail;
+        }
+        return data;
       }
 
       function showPartialPreview(src, meta) {
@@ -1138,7 +1521,7 @@
         const src = imageSrcFromEntry(entry);
         if (!src) return;
 
-        activeHash = entry.hash;
+        activeHash = entry.hash || entry.id;
         els.previewWrap.innerHTML = "";
         const img = document.createElement("img");
         img.alt = "生成结果";
@@ -1169,8 +1552,9 @@
           "<br>" +
           escapeHtml(shortPrompt) +
           "<br><small>" +
-          escapeHtml(entry.hash || "").slice(0, 16) +
-          "…</small>";
+          escapeHtml(entry.hash || entry.id || "").slice(0, 16) +
+          "…</small>" +
+          metaGridHtml(entry);
 
         renderHistoryGrid();
       }
@@ -1197,17 +1581,80 @@
         activeHash = null;
       }
 
-      async function renderHistoryGrid() {
+      function updateHistoryLoadMoreButton(fromServer) {
+        if (!els.btnLoadMoreHistory) return;
+        const visible = fromServer && serverHistoryHasMore;
+        els.btnLoadMoreHistory.hidden = !visible;
+        els.btnLoadMoreHistory.disabled = historyLoading;
+        els.btnLoadMoreHistory.textContent = historyLoading ? "加载中..." : "加载更多";
+      }
+
+      async function renderHistoryGrid(options = {}) {
+        if (historyLoading) return;
+        const append = options.append === true;
         let list;
+        let fromServer = false;
+        historyLoading = true;
+        updateHistoryLoadMoreButton(serverHistoryLoaded);
         try {
-          list = await listCacheEntries();
+          if (append) {
+            if (!serverHistoryLoaded || !serverHistoryHasMore || !serverHistoryCursor) return;
+            const page = await listServerImages(serverHistoryCursor);
+            const seen = new Set(serverHistoryItems.map((item) => item.id || item.hash));
+            const nextItems = page.data
+              .map(normalizeServerEntry)
+              .filter((item) => {
+                const key = item.id || item.hash;
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+              });
+            serverHistoryItems.push(...nextItems);
+            serverHistoryHasMore = page.hasMore;
+            serverHistoryCursor = page.nextCursor;
+            list = serverHistoryItems;
+            fromServer = true;
+          } else {
+            const page = await listServerImages();
+            serverHistoryItems = page.data.map(normalizeServerEntry);
+            serverHistoryHasMore = page.hasMore;
+            serverHistoryCursor = page.nextCursor;
+            serverHistoryLoaded = serverHistoryItems.length > 0;
+            if (serverHistoryItems.length) {
+              list = serverHistoryItems;
+              fromServer = true;
+            } else {
+              list = await listCacheEntries();
+              serverHistoryItems = [];
+              serverHistoryHasMore = false;
+              serverHistoryCursor = null;
+              serverHistoryLoaded = false;
+            }
+          }
         } catch (err) {
-          els.historyCount.textContent = "0 / " + MAX_CACHE;
-          els.historyGrid.innerHTML =
-            '<div class="history-empty">缓存读取失败</div>';
-          throw err;
+          if (append) {
+            setStatus("加载更多失败: " + (err.message || err), "error");
+            return;
+          }
+          try {
+            list = await listCacheEntries();
+            serverHistoryItems = [];
+            serverHistoryHasMore = false;
+            serverHistoryCursor = null;
+            serverHistoryLoaded = false;
+          } catch (_) {
+            els.historyCount.textContent = "0 / " + MAX_CACHE;
+            els.historyGrid.innerHTML =
+              '<div class="history-empty">缓存读取失败</div>';
+            throw err;
+          }
+        } finally {
+          historyLoading = false;
+          updateHistoryLoadMoreButton(serverHistoryLoaded);
         }
-        els.historyCount.textContent = list.length + " / " + MAX_CACHE;
+        els.historyCount.textContent = fromServer
+          ? list.length + (serverHistoryHasMore ? "+" : "") + " / 服务端"
+          : list.length + " / " + MAX_CACHE;
 
         if (list.length === 0) {
           els.historyGrid.innerHTML =
@@ -1217,67 +1664,96 @@
 
         els.historyGrid.innerHTML = "";
         for (const entry of list) {
-          const src = imageSrcFromEntry(entry);
+          const src = previewSrcFromEntry(entry);
           if (!src) continue;
 
           const div = document.createElement("div");
           div.className =
-            "history-item" + (entry.hash === activeHash ? " active" : "");
+            "history-item" +
+            ((entry.hash || entry.id) === activeHash ? " active" : "");
           div.title = (entry.prompt || "").slice(0, 120);
-          div.dataset.hash = entry.hash;
+          div.dataset.hash = entry.hash || entry.id;
 
           const img = document.createElement("img");
           img.src = src;
           img.alt = "";
+          img.loading = "lazy";
+          img.decoding = "async";
           div.appendChild(img);
+
+          const info = document.createElement("div");
+          info.className = "history-info";
+          const prompt = document.createElement("div");
+          prompt.className = "history-prompt";
+          prompt.textContent = entry.prompt || "未填写提示词";
+          const meta = document.createElement("div");
+          meta.className = "history-meta";
+          meta.textContent =
+            formatDimensions(entry.thumbnailWidth || entry.originalWidth, entry.thumbnailHeight || entry.originalHeight) +
+            " · " +
+            formatBytes(entry.thumbnailBytes || entry.originalBytes) +
+            (entry.compressionRatio
+              ? " · " + Math.round(entry.compressionRatio * 100) + "%"
+              : "");
+          info.appendChild(prompt);
+          info.appendChild(meta);
+          div.appendChild(info);
 
           div.addEventListener("click", () => {
             showPreview(entry, true);
-            setStatus("已从缓存加载", "ok");
+            setStatus(fromServer ? "已从服务端历史加载" : "已从缓存加载", "ok");
           });
 
           els.historyGrid.appendChild(div);
         }
       }
 
-      function imageFromBase64(b64) {
-        return { imageData: b64, url: null };
+      function imageFromBase64(b64, fallbackMimeType) {
+        const mimeType = mimeFromBase64(b64) || fallbackMimeType || "";
+        return { imageData: b64, url: null, mimeType };
       }
 
-      function normalizeImageResult(result) {
+      function normalizeImageResult(result, fallbackMimeType) {
         if (!result) return null;
         if (typeof result === "string" && result.trim()) {
-          return imageFromBase64(result.trim());
+          return imageFromBase64(result.trim(), fallbackMimeType);
         }
         if (typeof result !== "object") return null;
+        const declaredMime =
+          result.mime_type ||
+          result.mimeType ||
+          result.content_type ||
+          result.contentType ||
+          fallbackMimeType ||
+          "";
         const b64 =
           result.b64_json || result.base64 || result.image || result.data || "";
         if (typeof b64 === "string" && b64.trim()) {
-          return imageFromBase64(b64.trim());
+          return imageFromBase64(b64.trim(), declaredMime);
         }
         if (typeof result.url === "string" && result.url.trim()) {
-          return { imageData: null, url: result.url.trim() };
+          return { imageData: null, url: result.url.trim(), mimeType: declaredMime };
         }
         return null;
       }
 
-      function extractImageFromImagesResponse(data) {
+      function extractImageFromImagesResponse(data, fallbackMimeType) {
         if (!data || !Array.isArray(data.data) || !data.data.length) {
           throw new Error("响应中无图像数据");
         }
         const item = data.data[0];
-        const img = normalizeImageResult(item);
+        const img = normalizeImageResult(item, fallbackMimeType);
         if (img) return img;
         throw new Error("无法解析图像字段（需要 b64_json 或 url）");
       }
 
-      function extractImageFromResponsesResponse(data) {
+      function extractImageFromResponsesResponse(data, fallbackMimeType) {
         if (!data || !Array.isArray(data.output)) {
           throw new Error("Responses API 响应中无 output");
         }
         for (const item of data.output) {
           if (!item || item.type !== "image_generation_call") continue;
-          const img = normalizeImageResult(item.result);
+          const img = normalizeImageResult(item.result, fallbackMimeType);
           if (img) return img;
         }
         throw new Error("无法解析 Responses API 图像结果");
@@ -1397,9 +1873,9 @@
           }
         });
 
-        if (finalResponse) return extractImageFromImagesResponse(finalResponse);
+        if (finalResponse) return extractImageFromImagesResponse(finalResponse, mimeType);
         if (completed.length) {
-          return extractImageFromImagesResponse({ data: completed });
+          return extractImageFromImagesResponse({ data: completed }, mimeType);
         }
         throw new Error("流式接口未返回最终图片数据");
       }
@@ -1428,9 +1904,9 @@
           }
         });
 
-        if (finalResponse) return extractImageFromResponsesResponse(finalResponse);
+        if (finalResponse) return extractImageFromResponsesResponse(finalResponse, mimeType);
         if (doneItems.length) {
-          return extractImageFromResponsesResponse({ output: doneItems });
+          return extractImageFromResponsesResponse({ output: doneItems }, mimeType);
         }
         throw new Error("Responses 流式接口未返回最终图片数据");
       }
@@ -1484,7 +1960,8 @@
             mimeFromFormat(params.outputFormat)
           );
         }
-        return extractImageFromImagesResponse(await parseJsonResponse(res));
+        const data = await parseJsonResponse(res);
+        return extractImageFromImagesResponse(data, mimeFromFormat(params.outputFormat));
       }
 
       async function fetchResponsesApi(params, apiKey, settings, onPartial) {
@@ -1535,7 +2012,8 @@
             mimeFromFormat(params.outputFormat)
           );
         }
-        return extractImageFromResponsesResponse(await parseJsonResponse(res));
+        const data = await parseJsonResponse(res);
+        return extractImageFromResponsesResponse(data, mimeFromFormat(params.outputFormat));
       }
 
       async function fetchImageFromApi(params, apiKey, settings, onPartial) {
@@ -1610,8 +2088,8 @@
             model: params.model,
             size: params.size,
             quality: params.quality,
-            outputFormat: params.outputFormat,
-            mimeType: mimeFromFormat(params.outputFormat),
+            outputFormat: formatFromMime(img.mimeType) || params.outputFormat,
+            mimeType: img.mimeType || mimeFromFormat(params.outputFormat),
             streamed: params.useStream,
             referenceImageCount: params.referenceImages.length,
             referenceImageHashes: params.referenceImages.map((item) => item.hash),
@@ -1620,10 +2098,41 @@
             timestamp: Date.now(),
           };
 
+          try {
+            const serverRecord = await saveServerImage(entry);
+            if (serverRecord) {
+              entry.id = serverRecord.id;
+              entry.public_url = serverRecord.thumbnail_url || serverRecord.public_url;
+              entry.preview_url = serverRecord.preview_url || entry.public_url;
+              if (serverRecord.thumbnail) {
+                entry.thumbnailBytes = serverRecord.thumbnail.bytes;
+                entry.thumbnailWidth = serverRecord.thumbnail.width;
+                entry.thumbnailHeight = serverRecord.thumbnail.height;
+                entry.thumbnailMimeType = serverRecord.thumbnail.mime_type;
+                entry.originalBytes = serverRecord.thumbnail.original_bytes;
+                entry.originalWidth = serverRecord.thumbnail.original_width;
+                entry.originalHeight = serverRecord.thumbnail.original_height;
+                entry.compressionRatio = serverRecord.thumbnail.compression_ratio;
+              }
+              if (serverRecord.preview) {
+                entry.previewBytes = serverRecord.preview.bytes;
+                entry.previewWidth = serverRecord.preview.width;
+                entry.previewHeight = serverRecord.preview.height;
+                entry.previewMimeType = serverRecord.preview.mime_type;
+              }
+            }
+          } catch (err) {
+            setStatus("生成成功，但服务端历史写入失败: " + (err.message || err), "error");
+          }
+
           await putCacheEntry(entry);
           await trimCache();
           showPreview(entry, false);
-          setStatus("生成成功并已写入缓存", "ok");
+          if (entry.id) {
+            setStatus("生成成功，服务端历史已写入", "ok");
+          } else if (!els.status.className.includes("error")) {
+            setStatus("生成成功并已写入本地缓存", "ok");
+          }
         } catch (err) {
           resetPreviewPlaceholder();
           setStatus(err.message || String(err), "error");
@@ -1730,6 +2239,9 @@
 
       els.btnGenerate.addEventListener("click", generate);
       els.btnClearCache.addEventListener("click", clearCache);
+      els.btnLoadMoreHistory.addEventListener("click", () =>
+        renderHistoryGrid({ append: true })
+      );
 
       els.prompt.addEventListener("keydown", (e) => {
         if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
@@ -1741,7 +2253,7 @@
       loadSettings();
       renderReferenceImages();
       openDb()
-        .then(renderHistoryGrid)
+        .then(() => renderHistoryGrid())
         .catch((e) => setStatus("IndexedDB 初始化失败: " + e.message, "error"));
     })();
   </script>

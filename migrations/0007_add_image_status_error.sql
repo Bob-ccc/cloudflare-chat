@@ -1,0 +1,4 @@
+ALTER TABLE images ADD COLUMN status TEXT DEFAULT 'completed';
+ALTER TABLE images ADD COLUMN error TEXT;
+ALTER TABLE images ADD COLUMN completed_at TEXT;
+ALTER TABLE images ADD COLUMN generation_ms INTEGER DEFAULT 0;

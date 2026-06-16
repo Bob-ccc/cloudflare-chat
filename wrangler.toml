@@ -1,6 +1,15 @@
 name = "image-gen-proxy"
-main = "cloudflare-worker.js"
 compatibility_date = "2026-06-01"
+pages_build_output_dir = "."
 
 [vars]
 UPSTREAM_BASE = "https://api.openai.com"
+QINIU_BUCKET = "ai-videoxjp"
+QINIU_REGION = "as0"
+QINIU_PUBLIC_DOMAIN = "http://xjp.zaoj.top"
+QINIU_PREFIX = "uploads/"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "cloudflare-chat-db"
+database_id = "bafda995-6103-410c-bf18-4cf10337d27a"
