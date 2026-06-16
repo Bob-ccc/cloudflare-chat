@@ -539,6 +539,8 @@ async function handleAgnesGenerate(request, env) {
   const model = textValue(body.model || "agnes-image-2.1-flash", 128) || "agnes-image-2.1-flash";
   const prompt = textValue(body.prompt);
   const size = textValue(body.size || "1024x768", 32) || "1024x768";
+  const responseFormatInput = textValue(body.response_format || body.responseFormat || body.output_format || body.outputFormat, 32).toLowerCase();
+  const responseFormat = responseFormatInput === "url" ? "url" : "b64_json";
   const images = Array.isArray(body.images)
     ? body.images.filter((item) => typeof item === "string" && item.trim()).slice(0, 10)
     : [];
@@ -553,9 +555,14 @@ async function handleAgnesGenerate(request, env) {
   if (images.length) {
     payload.extra_body = {
       image: images,
-      response_format: "b64_json",
+      response_format: responseFormat,
+    };
+  } else if (responseFormat === "url") {
+    payload.extra_body = {
+      response_format: "url",
     };
   } else {
+    payload.response_format = "b64_json";
     payload.return_base64 = true;
   }
 
@@ -591,7 +598,7 @@ async function handleAgnesGenerate(request, env) {
   let mimeType = item.mime_type || item.mimeType || item.content_type || item.contentType || "image/png";
   let url = item.url || "";
 
-  if (!imageData && url) {
+  if (!imageData && url && responseFormat !== "url") {
     const imageRes = await fetch(url);
     if (!imageRes.ok) {
       return jsonResponse({ error: { message: "Agnes image URL download failed" } }, 502, request);
@@ -602,17 +609,19 @@ async function handleAgnesGenerate(request, env) {
     url = "";
   }
 
-  if (!imageData) return jsonResponse({ error: { message: "Agnes response has neither b64_json nor url", raw: json } }, 502, request);
-  mimeType = mimeFromBase64(imageData) || mimeType;
+  if (!imageData && !url) return jsonResponse({ error: { message: "Agnes response has neither b64_json nor url", raw: json } }, 502, request);
+  if (imageData) mimeType = mimeFromBase64(imageData) || mimeType;
 
   return jsonResponse(
     {
       data: {
         imageData,
+        url,
         mimeType,
         format: formatFromMime(mimeType),
         model,
         size,
+        response_format: responseFormat,
         revised_prompt: item.revised_prompt || null,
         raw: json,
       },

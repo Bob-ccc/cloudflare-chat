@@ -438,6 +438,22 @@
     .field.model { grid-column: span 2; }
     .field.size { grid-column: span 2; }
     .field.video-url { grid-column: span 2; }
+    .field.check { align-self: end; }
+    .check-label {
+      height: 36px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .field.check input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      padding: 0;
+      accent-color: var(--primary);
+    }
     .field .custom-size { margin-top: 6px; }
     .composer-actions {
       display: flex;
@@ -744,6 +760,9 @@
             </select>
             <input id="customSize" class="custom-size" placeholder="宽x高，例如 1024x768" hidden />
           </div>
+          <div class="field check image-param"><label>输出</label>
+            <label class="check-label"><input id="outputUrl" type="checkbox" />URL</label>
+          </div>
           <div class="field video-param" hidden><label>帧数</label>
             <select id="videoFrames">
               <option value="81">81</option>
@@ -819,7 +838,7 @@
   <script>
     const $ = (id) => document.getElementById(id);
     const els = {
-      apiKey: $("apiKey"), baseUrl: $("baseUrl"), model: $("model"), size: $("size"), customSize: $("customSize"),
+      apiKey: $("apiKey"), baseUrl: $("baseUrl"), model: $("model"), size: $("size"), customSize: $("customSize"), outputUrl: $("outputUrl"),
       videoFrames: $("videoFrames"), videoRate: $("videoRate"), videoImageUrls: $("videoImageUrls"),
       prompt: $("prompt"), generate: $("generate"),
       status: $("status"), gallery: $("gallery"), search: $("search"), formatFilter: $("formatFilter"),
@@ -942,6 +961,7 @@
         : ["apiKey","baseUrl","model","prompt"];
       const s = Object.fromEntries(fields.map(k => [k, els[k].value]));
       s.size = currentSizeValue();
+      if (activeMode === "image") s.responseFormat = els.outputUrl.checked ? "url" : "b64_json";
       if (els.size.value === CUSTOM_SIZE_VALUE) els.customSize.value = s.size;
       localStorage.setItem(settingKey, JSON.stringify(s));
       return s;
@@ -958,9 +978,11 @@
         }        for (const [k, v] of Object.entries(s)) {
           if (k === "size") { setSizeValue(v); continue; }
           if (k === "model") { setModelValue(v); continue; }
+          if (k === "responseFormat" && els.outputUrl) { els.outputUrl.checked = v === "url"; continue; }
           if (!els[k] || v == null) continue;
           els[k].value = v;
         }
+        if (activeMode === "video" && els.outputUrl) els.outputUrl.checked = false;
         if (!s.size) setSizeValue(activeMode === "video" ? "1152x768" : "1024x768");
       } catch (_) {}
     }
@@ -1554,6 +1576,7 @@
       els.imageModeBtn.classList.toggle("active", mode === "image");
       els.videoModeBtn.classList.toggle("active", mode === "video");
       for (const node of document.querySelectorAll(".video-param")) node.hidden = mode !== "video";
+      for (const node of document.querySelectorAll(".image-param")) node.hidden = mode !== "image";
       els.inputImages.hidden = false;
       els.attachImage.hidden = false;
       els.formatFilter.innerHTML = mode === "video"
@@ -1762,12 +1785,13 @@
             prompt: s.prompt.trim(),
             size: s.size || "1024x768",
             images: inputImageDataUrls,
+            response_format: s.responseFormat || "b64_json",
           }),
         });
         const json = await parseJson(res);
         const img = json.data || {};
         const outputFormat = img.format || formatFromMime(img.mimeType) || "png";
-        const entry = { ...img, prompt: s.prompt.trim(), model: s.model, size: s.size, quality: "auto", format: outputFormat, streamed: false, reference_count: inputImageDataUrls.length };
+        const entry = { ...img, prompt: s.prompt.trim(), model: s.model, size: s.size, quality: "auto", format: outputFormat, streamed: false, reference_count: inputImageDataUrls.length, response_format: s.responseFormat || img.response_format || "b64_json" };
         const saved = await saveImage(entry);
         images = images.filter(item => item.id !== pendingId);
         await loadGallery();
@@ -1859,6 +1883,7 @@
     els.size.addEventListener("change", () => { updateCustomSizeVisibility(); saveSettings(); });
     els.customSize.addEventListener("input", saveSettings);
     els.customSize.addEventListener("change", saveSettings);
+    els.outputUrl.addEventListener("change", saveSettings);
     for (const id of ["videoFrames","videoRate","videoImageUrls"]) {
       els[id].addEventListener("change", saveSettings);
       if (id === "videoImageUrls") els[id].addEventListener("input", saveSettings);
